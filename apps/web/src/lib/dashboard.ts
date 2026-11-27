@@ -49,6 +49,10 @@ export function toSearchParams({ indicator, year, countries, order, region }: Da
   return params.toString();
 }
 
+export function matchingView(views: SavedView[], params: DashboardParams): SavedView | undefined {
+  return views.find((view) => toSearchParams(view) === toSearchParams(params));
+}
+
 export function viewProblem(
   view: DashboardParams,
   meta: Pick<DashboardMeta, "indicators" | "countries" | "dataSummary">,

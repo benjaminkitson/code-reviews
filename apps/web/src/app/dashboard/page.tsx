@@ -4,6 +4,7 @@ import {
   LIFE_EXPECTANCY,
   fetchDashboardData,
   fetchDashboardMeta,
+  matchingView,
   parseParams,
   toScatterPoints,
   type RawSearchParams,
@@ -48,6 +49,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const yearRange = indicator.yearRange ?? { min: 1960, max: meta.dashboardSummary.latestYear };
   const year = params.year ?? indicator.latestYear ?? yearRange.max;
   const region = params.region && meta.dataSummary.regions.includes(params.region) ? params.region : null;
+  const settings = { ...params, indicator: indicator.code, region };
+  const matchedView = matchingView(meta.savedViews, settings);
   const yearOptions = Array.from({ length: yearRange.max - yearRange.min + 1 }, (_, i) => yearRange.max - i);
 
   // The scatter needs both GDP per capita and life expectancy, which end in
@@ -79,6 +82,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           {summary.countries} countries · data up to {summary.latestYear}
         </p>
+        {matchedView && (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Showing saved view <span className="font-medium text-zinc-900 dark:text-zinc-100">{matchedView.name}</span>
+          </p>
+        )}
       </header>
 
       {/* 1. Headline tiles */}
@@ -102,18 +110,12 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           indicators={meta.indicators}
           countries={meta.countries}
           regions={meta.dataSummary.regions}
-          selected={{
-            indicator: indicator.code,
-            year,
-            countries: params.countries,
-            order: params.order,
-            region,
-          }}
+          selected={{ ...settings, year }}
           yearOptions={yearOptions}
         />
       </Suspense>
 
-      <SavedViews params={{ ...params, indicator: indicator.code, region }} views={meta.savedViews} />
+      <SavedViews params={settings} views={meta.savedViews} />
 
       {/* 2. Indicator over time */}
       <ChartCard

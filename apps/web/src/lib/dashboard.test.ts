@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseParams, toSearchParams, viewProblem, type DashboardParams } from "./dashboard";
+import { matchingView, parseParams, toSearchParams, viewProblem, type DashboardParams } from "./dashboard";
 
 const view: DashboardParams = {
   indicator: "SP.POP.TOTL",
@@ -89,6 +89,53 @@ describe("viewProblem", () => {
     it("names the year", () => {
       const indicators = [{ ...meta.indicators[0], yearRange: null }];
       expect(viewProblem(view, { ...meta, indicators })).toBe("The indicator has no data for 2000.");
+    });
+  });
+});
+
+describe("matchingView", () => {
+  const views = [
+    { ...view, id: 1, name: "Other", indicator: "NY.GDP.PCAP.CD" },
+    { ...view, id: 2, name: "Population" },
+  ];
+
+  function matchingName(params: DashboardParams) {
+    return matchingView(views, params)?.name;
+  }
+
+  describe("when a view has EXACTLY the current settings", () => {
+    it("returns that view", () => {
+      expect(matchingName(view)).toBe("Population");
+    });
+  });
+
+  describe("when the year is NULL instead of the saved year", () => {
+    it("returns nothing", () => {
+      expect(matchingName({ ...view, year: null })).toBeUndefined();
+    });
+  });
+
+  describe("when the SAVED year is NULL but the current year is set", () => {
+    it("returns nothing", () => {
+      expect(matchingView([{ ...view, id: 3, name: "Latest", year: null }], view)).toBeUndefined();
+    });
+  });
+
+  describe("when the ranking order DIFFERS", () => {
+    it("returns nothing", () => {
+      expect(matchingName({ ...view, order: "DESC" })).toBeUndefined();
+    });
+  });
+
+  describe("when the countries are in a DIFFERENT order", () => {
+    it("returns nothing", () => {
+      expect(matchingName({ ...view, countries: ["GBR", "USA"] })).toBeUndefined();
+    });
+  });
+
+  describe("when the region DIFFERS", () => {
+    it("returns nothing", () => {
+      expect(matchingName({ ...view, region: null })).toBeUndefined();
     });
   });
 });
