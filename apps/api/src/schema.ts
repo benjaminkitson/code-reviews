@@ -1,6 +1,9 @@
-import { createSchema } from "graphql-yoga";
-import type { Prisma } from "@prisma/client";
+import { createGraphQLError, createSchema } from "graphql-yoga";
+import { Prisma } from "@prisma/client";
 import { prisma } from "./db.js";
+
+const MAX_VIEW_NAME_LENGTH = 60;
+const MAX_VIEW_COUNTRIES = 8;
 
 export const typeDefs = /* GraphQL */ `
   type Greeting {
@@ -107,6 +110,36 @@ export const typeDefs = /* GraphQL */ `
     DESC
   }
 
+  "A named dashboard configuration, shared by everyone using the app."
+  type SavedView {
+    id: Int!
+    "Unique name, trimmed, at most ${MAX_VIEW_NAME_LENGTH} characters."
+    name: String!
+    "Code of the indicator shown, e.g. NY.GDP.PCAP.CD"
+    indicator: String!
+    "Year shown. Null means the indicator's latest year."
+    year: Int
+    "ISO3 codes of the countries on the line chart, in display order."
+    countries: [String!]!
+    "Order of the ranking table."
+    order: SortOrder!
+    "World Bank region highlighted on the scatter, if any."
+    region: String
+    createdAt: String!
+  }
+
+  "A dashboard configuration to save under a name."
+  input SaveViewInput {
+    "Required, at most ${MAX_VIEW_NAME_LENGTH} characters, and not already used. Surrounding whitespace is trimmed."
+    name: String!
+    indicator: String!
+    "Leave null to always show the indicator's latest year."
+    year: Int
+    countries: [String!]!
+    order: SortOrder!
+    region: String
+  }
+
   type Query {
     "Simple health-check style query that does not touch the database."
     hello: String!
@@ -156,13 +189,34 @@ export const typeDefs = /* GraphQL */ `
     Countries with no value for any of the indicators are omitted.
     """
     countrySnapshot(indicatorCodes: [String!]!, year: Int!): [CountrySnapshot!]!
+
+    "Saved dashboard views, newest first."
+    savedViews: [SavedView!]!
+
+    "A single saved view by id."
+    savedView(id: Int!): SavedView
   }
 
   type Mutation {
     "Store a new greeting in the database and return it."
     addGreeting(message: String!): Greeting!
+
+    "Save a dashboard configuration under a unique name and return it."
+    saveView(input: SaveViewInput!): SavedView!
+
+    "Delete a saved view. Returns false if there was no view with that id."
+    deleteSavedView(id: Int!): Boolean!
   }
 `;
+
+type SaveViewInput = {
+  name: string;
+  indicator: string;
+  year?: number | null;
+  countries: string[];
+  order: "ASC" | "DESC";
+  region?: string | null;
+};
 
 type YearArgs = { fromYear?: number | null; toYear?: number | null };
 
@@ -324,6 +378,10 @@ export const resolvers = {
       }
       return [...byCountry.values()];
     },
+
+    savedViews: async () => prisma.savedView.findMany({ orderBy: [{ createdAt: "desc" }, { id: "desc" }] }),
+
+    savedView: async (_p: unknown, args: { id: number }) => prisma.savedView.findUnique({ where: { id: args.id } }),
   },
 
   Mutation: {
@@ -334,9 +392,45 @@ export const resolvers = {
       }
       return prisma.greeting.create({ data: { message } });
     },
+
+    saveView: async (_parent: unknown, args: { input: SaveViewInput }) => {
+      const name = args.input.name.trim();
+      const { countries } = args.input;
+      if (!name) {
+        throw createGraphQLError("Give the view a name.");
+      }
+      if (name.length > MAX_VIEW_NAME_LENGTH) {
+        throw createGraphQLError(`Keep the name to ${MAX_VIEW_NAME_LENGTH} characters or fewer.`);
+      }
+      const countriesAreValid =
+        countries.length >= 1 && countries.length <= MAX_VIEW_COUNTRIES && countries.every((c) => /^[A-Z]{3}$/.test(c));
+      if (!countriesAreValid) {
+        throw createGraphQLError(
+          `Choose between 1 and ${MAX_VIEW_COUNTRIES} countries, using three-letter codes such as GBR.`,
+        );
+      }
+      try {
+        return await prisma.savedView.create({
+          data: { ...args.input, name, countries: countries.join(",") },
+        });
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+          throw createGraphQLError(`A view called "${name}" already exists.`);
+        }
+        throw err;
+      }
+    },
+
+    deleteSavedView: async (_parent: unknown, args: { id: number }) =>
+      (await prisma.savedView.deleteMany({ where: { id: args.id } })).count > 0,
   },
 
   Greeting: {
+    createdAt: (parent: { createdAt: Date }) => parent.createdAt.toISOString(),
+  },
+
+  SavedView: {
+    countries: (parent: { countries: string }) => parent.countries.split(","),
     createdAt: (parent: { createdAt: Date }) => parent.createdAt.toISOString(),
   },
 
