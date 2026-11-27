@@ -113,7 +113,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         />
       </Suspense>
 
-      <SavedViews params={{ ...params, indicator: indicator.code, region }} />
+      <SavedViews params={{ ...params, indicator: indicator.code, region }} views={meta.savedViews} />
 
       {/* 2. Indicator over time */}
       <ChartCard
