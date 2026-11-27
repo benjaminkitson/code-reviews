@@ -25,7 +25,33 @@ async function main() {
     ],
   });
 
-  console.log("Seeded 3 greetings.");
+  await prisma.savedView.createMany({
+    data: [
+      {
+        name: "South Asia population in 2000",
+        indicator: "SP.POP.TOTL",
+        year: 2000,
+        countries: "IND,PAK,BGD,LKA,NPL",
+        order: "DESC",
+        region: "South Asia",
+      },
+      {
+        name: "Lowest life expectancy, Sub-Saharan Africa",
+        indicator: "SP.DYN.LE00.IN",
+        countries: "NGA,ETH,KEN,ZAF,COD",
+        order: "ASC",
+        region: "Sub-Saharan Africa",
+      },
+      {
+        name: "G7 GDP per capita",
+        indicator: "NY.GDP.PCAP.CD",
+        countries: "CAN,FRA,DEU,ITA,JPN,GBR,USA",
+        order: "DESC",
+      },
+    ],
+  });
+
+  console.log("Seeded 3 greetings and 3 saved views.");
 }
 
 main()
