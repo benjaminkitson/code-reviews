@@ -18,6 +18,7 @@ import { RegionBarChart } from "@/components/charts/RegionBarChart";
 import { GdpLifeScatter } from "@/components/charts/GdpLifeScatter";
 import { RankingTable } from "@/components/dashboard/RankingTable";
 import { Controls } from "@/components/dashboard/Controls";
+import { SavedViews } from "@/components/dashboard/SavedViews";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
     meta.indicators.find((i) => i.code === params.indicator) ?? meta.indicators[0];
   const yearRange = indicator.yearRange ?? { min: 1960, max: meta.dashboardSummary.latestYear };
   const year = params.year ?? indicator.latestYear ?? yearRange.max;
+  const region = params.region && meta.dataSummary.regions.includes(params.region) ? params.region : null;
   const yearOptions = Array.from({ length: yearRange.max - yearRange.min + 1 }, (_, i) => yearRange.max - i);
 
   // The scatter needs both GDP per capita and life expectancy, which end in
@@ -105,11 +107,13 @@ export default async function DashboardPage({ searchParams }: PageProps) {
             year,
             countries: params.countries,
             order: params.order,
-            region: params.region,
+            region,
           }}
           yearOptions={yearOptions}
         />
       </Suspense>
+
+      <SavedViews params={{ ...params, indicator: indicator.code, region }} />
 
       {/* 2. Indicator over time */}
       <ChartCard
@@ -164,7 +168,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       {/* 5. GDP vs life expectancy */}
       <ChartCard
         title="GDP per capita vs life expectancy"
-        subtitle={`One dot per country, ${scatterYear}${scatterYear !== year ? " (latest year with both indicators)" : ""}${params.region ? ` · highlighting ${params.region}` : ""} · ${scatterPoints.length} countries with both values`}
+        subtitle={`One dot per country, ${scatterYear}${scatterYear !== year ? " (latest year with both indicators)" : ""}${region ? ` · highlighting ${region}` : ""} · ${scatterPoints.length} countries with both values`}
         table={
           <DataTable
             columns={["Country", "Region", "GDP per capita", "Life expectancy"]}
@@ -180,7 +184,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         {scatterPoints.length === 0 ? (
           <EmptyChart message={`No countries have both GDP per capita and life expectancy for ${scatterYear}.`} />
         ) : (
-          <GdpLifeScatter points={scatterPoints} highlightRegion={params.region} />
+          <GdpLifeScatter points={scatterPoints} highlightRegion={region} />
         )}
       </ChartCard>
     </main>
