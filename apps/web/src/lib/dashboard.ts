@@ -42,6 +42,41 @@ export function parseParams(sp: RawSearchParams): DashboardParams {
   };
 }
 
+export function toSearchParams({ indicator, year, countries, order, region }: DashboardParams): string {
+  const params = new URLSearchParams({ indicator, countries: countries.join(","), order });
+  if (year !== null) params.set("year", String(year));
+  if (region) params.set("region", region);
+  return params.toString();
+}
+
+export function matchingView(views: SavedView[], params: DashboardParams): SavedView | undefined {
+  return views.find((view) => toSearchParams(view) === toSearchParams(params));
+}
+
+export function viewProblem(
+  view: DashboardParams,
+  meta: Pick<DashboardMeta, "indicators" | "countries" | "dataSummary">,
+): string | null {
+  const indicator = meta.indicators.find((i) => i.code === view.indicator);
+  if (!indicator) return `The indicator “${view.indicator}” is no longer available.`;
+
+  const missingCountries = view.countries.filter((code) => !meta.countries.some((c) => c.code === code));
+  if (missingCountries.length > 0) {
+    return `These countries are no longer available: ${missingCountries.join(", ")}.`;
+  }
+
+  if (view.region && !meta.dataSummary.regions.includes(view.region)) {
+    return `The region “${view.region}” is no longer available.`;
+  }
+
+  const range = indicator.yearRange;
+  if (view.year !== null && (!range || view.year < range.min || view.year > range.max)) {
+    return `The indicator has no data for ${view.year}.`;
+  }
+
+  return null;
+}
+
 // ---------------------------------------------------------------- types
 
 export type IndicatorMeta = {
@@ -89,7 +124,10 @@ export type CountrySnapshot = {
   values: { indicatorCode: string; value: number }[];
 };
 
+export type SavedView = DashboardParams & { id: number; name: string };
+
 export type DashboardMeta = {
+  savedViews: SavedView[];
   dataSummary: { regions: string[] };
   dashboardSummary: DashboardSummary;
   indicators: IndicatorMeta[];
@@ -134,8 +172,23 @@ export function toScatterPoints(snapshot: CountrySnapshot[]): ScatterPoint[] {
 
 // ---------------------------------------------------------------- queries
 
+const SAVED_VIEW_FIELDS = /* GraphQL */ `
+  fragment SavedViewFields on SavedView {
+    id
+    name
+    indicator
+    year
+    countries
+    order
+    region
+  }
+`;
+
 const META_QUERY = /* GraphQL */ `
   query DashboardMeta {
+    savedViews {
+      ...SavedViewFields
+    }
     dataSummary {
       regions
     }
@@ -162,6 +215,7 @@ const META_QUERY = /* GraphQL */ `
       region
     }
   }
+  ${SAVED_VIEW_FIELDS}
 `;
 
 const DATA_QUERY = /* GraphQL */ `
@@ -208,6 +262,19 @@ const DATA_QUERY = /* GraphQL */ `
 
 export async function fetchDashboardMeta(): Promise<DashboardMeta> {
   return gqlFetch<DashboardMeta>(META_QUERY);
+}
+
+const SAVED_VIEW_QUERY = /* GraphQL */ `
+  query SavedView($id: Int!) {
+    savedView(id: $id) {
+      ...SavedViewFields
+    }
+  }
+  ${SAVED_VIEW_FIELDS}
+`;
+
+export async function fetchSavedView(id: number): Promise<SavedView | null> {
+  return (await gqlFetch<{ savedView: SavedView | null }>(SAVED_VIEW_QUERY, { id })).savedView;
 }
 
 export async function fetchDashboardData(params: {

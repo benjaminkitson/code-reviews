@@ -13,6 +13,8 @@ export function getGraphqlUrl(): string {
   return process.env.NEXT_PUBLIC_GRAPHQL_URL ?? "http://localhost:4000/graphql";
 }
 
+export class GraphqlResponseError extends Error {}
+
 type GraphqlResponse<T> = {
   data?: T;
   errors?: { message: string }[];
@@ -38,7 +40,7 @@ export async function gqlFetch<T>(
 
   const json = (await res.json()) as GraphqlResponse<T>;
   if (json.errors?.length) {
-    throw new Error(json.errors.map((e) => e.message).join("; "));
+    throw new GraphqlResponseError(json.errors.map((e) => e.message).join("; "));
   }
   if (!json.data) {
     throw new Error("GraphQL response contained no data");
